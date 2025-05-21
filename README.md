@@ -1,7 +1,7 @@
 # AntColonyTycoon
 V1 
 Dear Friends, 
-*Indie web app game still under development*
+*Indie web app game still under development, this game/code is for testing purposes only*
 
 Welcome to Ant Colony Tycoon, where your colony is more than just ants—it's a living metaphor for the human mind.
 Within the dark chambers of your consciousness lies a colony of ideas, each represented by an ant with its own role, purpose, and potential. Your brain is the colony, and your thoughts are the ants that work tirelessly to maintain balance, growth, and survival.
