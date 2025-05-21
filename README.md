@@ -1,6 +1,7 @@
 # AntColonyTycoon
 V1 
 Dear Friends, 
+
 *Indie web app game still under development, this game/code is for testing purposes only*
 
 Welcome to Ant Colony Tycoon, where your colony is more than just ants—it's a living metaphor for the human mind.
