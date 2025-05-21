@@ -1,0 +1,904 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ant Colony Tycoon</title>
+    <link href="../dist/output.css" rel="stylesheet">
+    <style>
+        .paused { color: #FFC107; }
+        .achievement { background-color: rgba(255, 193, 7, 0.2); padding: 5px; border: 1px solid #FFC107; margin: 5px 0; }
+        .achievement.unlocked { background-color: rgba(255, 193, 7, 0.4); }
+        
+        /* Animation Keyframes */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            0% { transform: translateX(-20px); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px #FFC107; }
+            50% { box-shadow: 0 0 20px #FFC107, 0 0 30px #FF6D00; }
+        }
+        
+        /* Element Animations */
+        .food-change {
+            animation: pulse 0.5s ease-in-out;
+        }
+        
+        .new-ant {
+            animation: slideIn 0.5s ease-out, fadeIn 0.5s ease-in;
+        }
+        
+        .foraging {
+            animation: wiggle 1s infinite;
+        }
+        
+        .healed {
+            animation: glow 1s;
+        }
+        
+        .achievement-unlocked {
+            animation: bounce 1s ease;
+        }
+        
+        .log-entry {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        /* Button Hover Animations */
+        .btn-hover:hover:not(:disabled) {
+            transform: translateY(-2px);
+            transition: transform 0.2s;
+        }
+        
+        /* Achievement unlock animation */
+        .achievement-popup {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 193, 7, 0.9);
+            color: black;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 100;
+            animation: fadeIn 0.5s, bounce 1s, fadeIn 0.5s reverse forwards;
+            animation-delay: 0s, 0s, 3s;
+        }
+    </style>
+</head>
+<body class="bg-black flex justify-center items-center min-h-screen">
+    <div id="achievementPopup" class="hidden"></div>
+    <div class="bg-black p-6 rounded-lg shadow-lg w-full max-w-4xl border border-amber-600 flex flex-col md:flex-row">
+        <!-- Left Column -->
+        <div class="flex-1 mr-0 md:mr-4">
+            <h1 class="text-2xl font-bold text-center mb-4 text-amber-400">Ant Colony Tycoon</h1>
+            
+            <!-- Game Time Controls -->
+            <div class="mb-4 flex justify-between items-center">
+                <div>
+                    <p id="gameTime" class="text-lg text-amber-400">Day 1, 00:00</p>
+                    <p id="gameDate" class="text-lg text-amber-400">January 1, 2023</p>
+                </div>
+                <button id="pauseButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 btn-hover">Pause</button>
+            </div>
+
+            <!-- Game Stats -->
+            <div class="mb-4">
+                <p id="food" class="text-lg text-amber-400">Food: 1000 units</p>
+                <p id="ants" class="text-lg text-amber-400">Ants: 0</p>
+                <p id="completedForages" class="text-lg text-amber-400">Completed Forages: 0</p>
+                <p id="overheadStatus" class="text-lg text-red-500">Next overhead cost in 30s</p>
+            </div>
+
+            <!-- Recruit Ants -->
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-amber-400">Recruit Ants</h2>
+                <div class="flex flex-col space-y-2">
+                    <div>
+                        <p class="text-red-500">Worker Ant: 100 food (Forages)</p>
+                        <button id="recruitWorkerButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="recruitAnt('worker')">Recruit Worker</button>
+                    </div>
+                    <div>
+                        <p class="text-red-500">Soldier Ant: 200 food (Reduces wound chance)</p>
+                        <button id="recruitSoldierButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="recruitAnt('soldier')">Recruit Soldier</button>
+                    </div>
+                    <div>
+                        <p class="text-red-500">Scout Ant: 150 food (Increases forage speed)</p>
+                        <button id="recruitScoutButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="recruitAnt('scout')">Recruit Scout</button>
+                    </div>
+                    <div>
+                        <p class="text-red-500">Nurse Ant: 250 food (Reduces healing cost)</p>
+                        <button id="recruitNurseButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="recruitAnt('nurse')">Recruit Nurse</button>
+                    </div>
+                    <div>
+                        <p class="text-red-500">Queen Ant: 500 food (Boosts rewards, max 1)</p>
+                        <button id="recruitQueenButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="recruitAnt('queen')">Recruit Queen</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colony Upgrade -->
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-amber-400">Colony Upgrade</h2>
+                <p class="text-red-500">Wound Resistance: 1000 food (Reduces wound chance to 5%)</p>
+                <button id="upgradeButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="purchaseUpgrade()">Purchase Upgrade</button>
+            </div>
+
+            <!-- Forage Assignment -->
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-amber-400">Assign Forage</h2>
+                <p id="woundChance" class="text-red-500 mb-2">Wound Chance: 10%</p>
+                <div class="mb-2">
+                    <label for="forageType" class="text-red-500">Select Forage Type:</label>
+                    <select id="forageType" class="border border-amber-600 rounded px-2 py-1 bg-black text-amber-400">
+                        <option value="basic">Basic Forage (Cost: 50 food, Reward: 100 food, 5s)</option>
+                        <option value="advanced">Advanced Forage (Cost: 100 food, Reward: 200 food, 7s)</option>
+                        <option value="expert">Expert Forage (Cost: 150 food, Reward: 300 food, 10s)</option>
+                    </select>
+                </div>
+                <button id="assignButton" class="bg-amber-600 text-black px-4 py-2 rounded hover:bg-amber-700 disabled:bg-gray-800 btn-hover" onclick="assignForage()">Assign Forage</button>
+                <p id="forageStatus" class="text-red-500 mt-2">No forages in progress</p>
+            </div>
+
+            <!-- Ant Colony -->
+            <div>
+                <h2 class="text-xl font-semibold text-amber-400">Ant Colony</h2>
+                <ul id="antList" class="list-disc pl-5 text-amber-400"></ul>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="flex-1 mt-4 md:mt-0 md:ml-4 border-t md:border-t-0 md:border-l border-amber-600 pt-4 md:pt-0 md:pl-4">
+            <h2 class="text-xl font-bold text-center mb-4 text-amber-400">Colony Records</h2>
+            
+            <!-- Achievements -->
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-amber-400">Achievements</h3>
+                <ul id="achievementsList" class="pl-5 text-amber-400">
+                    <li id="achievement-first-ant" class="achievement">
+                        <span class="font-bold">First Steps:</span> Recruit your first ant
+                    </li>
+                    <li id="achievement-first-queen" class="achievement">
+                        <span class="font-bold">Royalty:</span> Recruit a queen ant
+                    </li>
+                    <li id="achievement-10-ants" class="achievement">
+                        <span class="font-bold">Growing Colony:</span> Have 10 ants at once
+                    </li>
+                    <li id="achievement-wound-resistance" class="achievement">
+                        <span class="font-bold">Safety First:</span> Purchase wound resistance
+                    </li>
+                    <li id="achievement-25-forages" class="achievement">
+                        <span class="font-bold">Busy Bees...err Ants:</span> Complete 25 forages
+                    </li>
+                    <li id="achievement-full-crew" class="achievement">
+                        <span class="font-bold">Full Crew:</span> Have all ant types at once
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Colony Hierarchy -->
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-amber-400">Colony Hierarchy</h3>
+                <div id="colonyHierarchy" class="text-amber-400 bg-black bg-opacity-50 p-2 rounded-sm border border-amber-800 max-h-60 overflow-y-auto"></div>
+            </div>
+
+            <!-- Profit Log -->
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold text-amber-400">Profit Log</h3>
+                <ul id="profitLog" class="list-disc pl-5 text-red-500 max-h-32 overflow-y-auto"></ul>
+            </div>
+            
+            <!-- Loss Log -->
+            <div>
+                <h3 class="text-lg font-semibold text-amber-400">Loss Log</h3>
+                <ul id="lossLog" class="list-disc pl-5 text-red-500 max-h-32 overflow-y-auto"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let food = 1000;
+        let ants = [];
+        let completedForages = 0;
+        let foragesInProgress = 0;
+        let overheadTimer = 30;
+        let woundResistanceUpgraded = false;
+        let profitLog = [];
+        let lossLog = [];
+        let gameIsPaused = false;
+        let simTime = 0; // Time in minutes
+        let simDay = 1;
+        let simMonth = 0;
+        let simYear = 2023;
+        let previousFood = 1000; // For animation tracking
+        let colonyRanks = ["Newly Hatched", "Junior", "Regular", "Senior", "Elite"]; // Ranks for each ant
+        
+        // Forage types definition
+        const forageTypes = {
+            basic: { cost: 50, reward: 100, duration: 5000 },
+            advanced: { cost: 100, reward: 200, duration: 7000 },
+            expert: { cost: 150, reward: 300, duration: 10000 }
+        };
+        
+        // Hierarchy definitions
+        const hierarchyRoles = {
+            queen: { level: 5, title: "Colony Ruler", subordinates: ["soldier", "scout", "nurse", "worker"] },
+            soldier: { level: 4, title: "Colony Defender", subordinates: [] },
+            scout: { level: 3, title: "Exploration Leader", subordinates: [] },
+            nurse: { level: 3, title: "Health Guardian", subordinates: [] },
+            worker: { level: 2, title: "Resource Gatherer", subordinates: [] }
+        };
+        
+        // Achievement tracking
+        let achievements = {
+            "first-ant": false,
+            "first-queen": false,
+            "10-ants": false,
+            "wound-resistance": false,
+            "25-forages": false,
+            "full-crew": false
+        };
+        
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        // Animation helper functions
+        function animateElement(element, className) {
+            element.classList.add(className);
+            setTimeout(() => {
+                element.classList.remove(className);
+            }, 1000);
+        }
+        
+        function showAchievementPopup(message) {
+            const popup = document.getElementById('achievementPopup');
+            popup.textContent = `🏆 ${message}`;
+            popup.className = 'achievement-popup';
+            
+            setTimeout(() => {
+                popup.className = 'hidden';
+            }, 4000);
+        }
+        
+        // Game time tracker (1 minute per second)
+        const timeInterval = setInterval(updateGameTime, 1000);
+        
+        function updateGameTime() {
+            if (gameIsPaused) return;
+            
+            simTime++;
+            if (simTime >= 1440) { // 24 hours * 60 minutes
+                simTime = 0;
+                simDay++;
+                if (simDay > 28) {
+                    simDay = 1;
+                    simMonth++;
+                    if (simMonth >= 12) {
+                        simMonth = 0;
+                        simYear++;
+                    }
+                }
+            }
+            
+            // Update ant experience/rank every 10 in-game minutes
+            if (simTime % 10 === 0) {
+                updateAntExperience();
+            }
+            
+            const hours = Math.floor(simTime / 60);
+            const minutes = simTime % 60;
+            document.getElementById('gameTime').textContent = `Day ${simDay}, ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            document.getElementById('gameDate').textContent = `${months[simMonth]} ${simDay}, ${simYear}`;
+        }
+        
+        // Update ant experience and potentially rank
+        function updateAntExperience() {
+            ants.forEach(ant => {
+                if (ant.health > 0) {
+                    ant.experience = (ant.experience || 0) + 1;
+                    
+                    // Calculate rank based on experience
+                    const newRank = Math.min(Math.floor(ant.experience / 50), colonyRanks.length - 1);
+                    if (newRank > (ant.rank || 0)) {
+                        ant.rank = newRank;
+                        profitLog.push(`${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} Ant #${ant.id} promoted to ${colonyRanks[ant.rank]}!`);
+                        updateUI();
+                    }
+                }
+            });
+        }
+        
+        // Get ant's supervisor (if any)
+        function getSupervisor(ant) {
+            const typeInfo = hierarchyRoles[ant.type];
+            
+            // Queen has no supervisor
+            if (ant.type === 'queen') return null;
+            
+            // Find a queen if exists
+            if (ants.some(a => a.type === 'queen' && a.health > 0)) {
+                return 'queen';
+            }
+            
+            // For other types, find highest ranking same-type ant with more experience
+            const sameTypeAnts = ants.filter(a => 
+                a.type === ant.type && 
+                a.id !== ant.id && 
+                a.health > 0 && 
+                a.experience > ant.experience
+            );
+            
+            if (sameTypeAnts.length > 0) {
+                sameTypeAnts.sort((a, b) => b.experience - a.experience);
+                return sameTypeAnts[0].id;
+            }
+            
+            return null;
+        }
+        
+        // Get ant's subordinates
+        function getSubordinates(ant) {
+            const typeInfo = hierarchyRoles[ant.type];
+            let subordinates = [];
+            
+            // Queen supervises all highest ranking ants of each type
+            if (ant.type === 'queen') {
+                const types = typeInfo.subordinates;
+                types.forEach(type => {
+                    const highestRank = ants.filter(a => a.type === type && a.health > 0)
+                                           .reduce((max, a) => Math.max(max, a.rank || 0), 0);
+                    const leaders = ants.filter(a => a.type === type && a.health > 0 && (a.rank || 0) === highestRank);
+                    subordinates = [...subordinates, ...leaders.map(a => a.id)];
+                });
+                return subordinates;
+            }
+            
+            // Other types supervise lower-rank same-type ants with less experience
+            return ants.filter(a => 
+                a.type === ant.type && 
+                a.id !== ant.id && 
+                a.health > 0 && 
+                (a.rank || 0) < (ant.rank || 0)
+            ).map(a => a.id);
+        }
+        
+        // Toggle game pause
+        document.getElementById('pauseButton').addEventListener('click', () => {
+            gameIsPaused = !gameIsPaused;
+            const pauseButton = document.getElementById('pauseButton');
+            if (gameIsPaused) {
+                pauseButton.textContent = "Resume";
+                pauseButton.classList.add("paused");
+                document.getElementById('gameTime').classList.add("paused");
+                document.getElementById('gameDate').classList.add("paused");
+            } else {
+                pauseButton.textContent = "Pause";
+                pauseButton.classList.remove("paused");
+                document.getElementById('gameTime').classList.remove("paused");
+                document.getElementById('gameDate').classList.remove("paused");
+            }
+        });
+
+        // Check achievements
+        function checkAchievements() {
+            // First ant
+            if (!achievements["first-ant"] && ants.length > 0) {
+                unlockAchievement("first-ant", "Recruited your first ant!");
+            }
+            
+            // First queen
+            if (!achievements["first-queen"] && ants.some(ant => ant.type === "queen")) {
+                unlockAchievement("first-queen", "Recruited a queen ant!");
+            }
+            
+            // 10 ants
+            if (!achievements["10-ants"] && ants.length >= 10) {
+                unlockAchievement("10-ants", "Colony has grown to 10 ants!");
+            }
+            
+            // Wound resistance
+            if (!achievements["wound-resistance"] && woundResistanceUpgraded) {
+                unlockAchievement("wound-resistance", "Colony upgraded with wound resistance!");
+            }
+            
+            // 25 forages
+            if (!achievements["25-forages"] && completedForages >= 25) {
+                unlockAchievement("25-forages", "Completed 25 successful forages!");
+            }
+            
+            // All ant types
+            const hasAllTypes = 
+                ants.some(ant => ant.type === "worker" && ant.health > 0) &&
+                ants.some(ant => ant.type === "soldier" && ant.health > 0) &&
+                ants.some(ant => ant.type === "scout" && ant.health > 0) &&
+                ants.some(ant => ant.type === "nurse" && ant.health > 0) &&
+                ants.some(ant => ant.type === "queen" && ant.health > 0);
+                
+            if (!achievements["full-crew"] && hasAllTypes) {
+                unlockAchievement("full-crew", "Recruited all ant types!");
+            }
+        }
+        
+        function unlockAchievement(id, message) {
+            achievements[id] = true;
+            const achievementElement = document.getElementById(`achievement-${id}`);
+            achievementElement.classList.add("unlocked");
+            animateElement(achievementElement, "achievement-unlocked");
+            
+            // Add achievement notification to profit log
+            profitLog.push(`🏆 ACHIEVEMENT: ${message}`);
+            
+            // Show popup
+            showAchievementPopup(message);
+            
+            updateUI();
+        }
+
+        // Overhead cost every 30 seconds
+        setInterval(() => {
+            if (gameIsPaused) return;
+            
+            overheadTimer--;
+            if (overheadTimer <= 0) {
+                overheadTimer = 30;
+                let totalCost = 0;
+                ants.forEach(ant => {
+                    if (ant.health > 0) {
+                        if (ant.type === 'worker') totalCost += 10;
+                        else if (ant.type === 'soldier') totalCost += 20;
+                        else if (ant.type === 'scout') totalCost += 15;
+                        else if (ant.type === 'nurse') totalCost += 25;
+                        else if (ant.type === 'queen') totalCost += 50;
+                    }
+                });
+                if (food >= totalCost) {
+                    previousFood = food;
+                    food -= totalCost;
+                    document.getElementById('overheadStatus').textContent = `Overhead cost paid: ${totalCost} food`;
+                    animateElement(document.getElementById('food'), "food-change");
+                } else {
+                    ants.forEach(ant => {
+                        if (ant.health > 0) {
+                            ant.health = Math.max(0, ant.health - 10);
+                            ant.status = ant.health === 0 ? 'Dead' : (ant.health < 100 ? 'Wounded' : ant.status);
+                        }
+                    });
+                    lossLog.push(`Insufficient food for overhead costs! Ants lost 10 health each.`);
+                    document.getElementById('overheadStatus').textContent = `Insufficient food! Ants lost 10 health each`;
+                }
+                updateUI();
+            } else {
+                document.getElementById('overheadStatus').textContent = `Next overhead cost in ${overheadTimer}s`;
+            }
+        }, 1000);
+
+        // Update UI
+        function updateUI() {
+            // Check if food has changed and animate if it has
+            const foodElement = document.getElementById('food');
+            foodElement.textContent = `Food: ${food} units`;
+            if (food !== previousFood) {
+                animateElement(foodElement, "food-change");
+                previousFood = food;
+            }
+            
+            document.getElementById('ants').textContent = `Ants: ${ants.length}`;
+            document.getElementById('completedForages').textContent = `Completed Forages: ${completedForages}`;
+            document.getElementById('recruitWorkerButton').disabled = food < 100;
+            document.getElementById('recruitSoldierButton').disabled = food < 200;
+            document.getElementById('recruitScoutButton').disabled = food < 150;
+            document.getElementById('recruitNurseButton').disabled = food < 250;
+            document.getElementById('recruitQueenButton').disabled = food < 500 || ants.some(ant => ant.type === 'queen');
+            document.getElementById('upgradeButton').disabled = food < 1000 || woundResistanceUpgraded;
+            const selectedForage = document.getElementById('forageType').value;
+            document.getElementById('assignButton').disabled = ants.filter(ant => ant.type === 'worker' && ant.health === 100).length === 0 || food < forageTypes[selectedForage].cost || foragesInProgress >= ants.filter(ant => ant.type === 'worker' && ant.health === 100).length || gameIsPaused;
+
+            // Update wound chance
+            const soldiers = ants.filter(ant => ant.type === 'soldier' && ant.health === 100).length;
+            const woundChance = Math.max(0, (woundResistanceUpgraded ? 0.05 : 0.1) - (soldiers * 0.02));
+            document.getElementById('woundChance').textContent = `Wound Chance: ${(woundChance * 100).toFixed(1)}%`;
+
+            // Update colony hierarchy visualization
+            updateColonyHierarchy();
+
+            // Update ant list
+            const antList = document.getElementById('antList');
+            antList.innerHTML = '';
+            ants.forEach((ant) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center mb-2';
+                
+                // Add animation classes based on ant status
+                if (ant.status === 'Idle') {
+                    li.classList.add('new-ant');
+                } else if (ant.status.includes('Foraging')) {
+                    li.classList.add('foraging');
+                }
+                
+                // Show rank for the ant
+                const rankText = ant.rank !== undefined ? colonyRanks[ant.rank] : colonyRanks[0];
+                const roleTitle = hierarchyRoles[ant.type].title;
+                
+                let statusText = `🐜 ${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} Ant #${ant.id}: ${rankText} ${roleTitle} - ${ant.status} (Health: ${ant.health})`;
+                if (ant.health === 0) {
+                    statusText = `🐜 ${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} Ant #${ant.id}: Dead (Health: 0)`;
+                }
+                li.textContent = statusText;
+                
+                // Add supervisor info if exists
+                const supervisor = getSupervisor(ant);
+                if (supervisor) {
+                    const supervisorInfo = document.createElement('div');
+                    supervisorInfo.className = 'text-xs text-amber-300 ml-6';
+                    if (supervisor === 'queen') {
+                        supervisorInfo.textContent = `Reports to: Queen`;
+                    } else {
+                        const supervisorAnt = ants.find(a => a.id === supervisor);
+                        if (supervisorAnt) {
+                            supervisorInfo.textContent = `Reports to: ${supervisorAnt.type.charAt(0).toUpperCase() + supervisorAnt.type.slice(1)} Ant #${supervisorAnt.id}`;
+                        }
+                    }
+                    li.appendChild(document.createElement('br'));
+                    li.appendChild(supervisorInfo);
+                }
+                
+                // Add healable indicator
+                if (ant.health < 100 && ant.health > 0) {
+                    const nurses = ants.filter(ant => ant.type === 'nurse' && ant.health === 100).length;
+                    const healCost = Math.round((100 - ant.health) * (1 - nurses * 0.2));
+                    const healButton = document.createElement('button');
+                    healButton.textContent = `Heal (${healCost} food)`;
+                    healButton.className = 'ml-2 bg-red-600 text-black px-2 py-1 rounded hover:bg-red-700 disabled:bg-gray-600';
+                    healButton.disabled = food < healCost || gameIsPaused;
+                    healButton.onclick = () => healAnt(ant.id);
+                    li.appendChild(healButton);
+                } else if (ant.health === 0) {
+                    const retireButton = document.createElement('button');
+                    retireButton.textContent = 'Retire';
+                    retireButton.className = 'ml-2 bg-red-600 text-black px-2 py-1 rounded hover:bg-red-700';
+                    retireButton.onclick = () => {
+                        if (confirm(`Retire ${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} Ant #${ant.id}?`)) {
+                            retireAnt(ant.id);
+                        }
+                    };
+                    li.appendChild(retireButton);
+                }
+                antList.appendChild(li);
+            });
+
+            // Update profit log
+            const profitLogList = document.getElementById('profitLog');
+            profitLogList.innerHTML = '';
+            profitLog.slice(-5).forEach(log => {
+                const li = document.createElement('li');
+                li.textContent = log;
+                li.className = "log-entry";
+                profitLogList.appendChild(li);
+            });
+            
+            // Update loss log
+            const lossLogList = document.getElementById('lossLog');
+            lossLogList.innerHTML = '';
+            lossLog.slice(-5).forEach(log => {
+                const li = document.createElement('li');
+                li.textContent = log;
+                li.className = "log-entry";
+                lossLogList.appendChild(li);
+            });
+            
+            // Check for achievements
+            checkAchievements();
+        }
+        
+        // Update colony hierarchy visualization
+        function updateColonyHierarchy() {
+            const hierarchyDiv = document.getElementById('colonyHierarchy');
+            hierarchyDiv.innerHTML = '';
+            
+            // Create a tree-like structure
+            const treeDiv = document.createElement('div');
+            treeDiv.className = 'mt-2 pl-2';
+            
+            // Start with queen or highest-level ants if no queen
+            const queen = ants.find(ant => ant.type === 'queen' && ant.health > 0);
+            if (queen) {
+                const queenDiv = createHierarchyNode(queen, 0);
+                treeDiv.appendChild(queenDiv);
+                
+                // Group subordinates by type
+                const subordinateTypes = hierarchyRoles['queen'].subordinates;
+                subordinateTypes.forEach(type => {
+                    // Find all of this type
+                    const typeAnts = ants.filter(ant => ant.type === type && ant.health > 0);
+                    if (typeAnts.length === 0) return;
+                    
+                    // Sort by rank and experience
+                    typeAnts.sort((a, b) => {
+                        if ((b.rank || 0) !== (a.rank || 0)) return (b.rank || 0) - (a.rank || 0);
+                        return (b.experience || 0) - (a.experience || 0);
+                    });
+                    
+                    // Create type header
+                    const typeHeader = document.createElement('div');
+                    typeHeader.className = 'text-amber-400 font-bold mt-1 mb-1 flex items-center';
+                    typeHeader.innerHTML = `
+                        <span class="inline-block w-4 h-4 border-l-2 border-b-2 border-amber-500 mr-2"></span>
+                        ${type.charAt(0).toUpperCase() + type.slice(1)} Ants (${typeAnts.length})
+                    `;
+                    treeDiv.appendChild(typeHeader);
+                    
+                    // Create hierarchy within this type
+                    const typeContainer = document.createElement('div');
+                    typeContainer.className = 'pl-6 border-l border-amber-800';
+                    
+                    // Add each ant of this type
+                    typeAnts.forEach(ant => {
+                        const antNode = createHierarchyNode(ant, 0);
+                        typeContainer.appendChild(antNode);
+                    });
+                    
+                    treeDiv.appendChild(typeContainer);
+                });
+            } else {
+                // No queen, organize by type
+                const typeGroups = {};
+                ants.filter(ant => ant.health > 0).forEach(ant => {
+                    if (!typeGroups[ant.type]) typeGroups[ant.type] = [];
+                    typeGroups[ant.type].push(ant);
+                });
+                
+                for (const type in typeGroups) {
+                    // Create type header
+                    const typeHeader = document.createElement('div');
+                    typeHeader.className = 'text-amber-400 font-bold mt-2';
+                    typeHeader.textContent = `${type.charAt(0).toUpperCase() + type.slice(1)} Ants (${typeGroups[type].length})`;
+                    treeDiv.appendChild(typeHeader);
+                    
+                    // Sort by rank
+                    typeGroups[type].sort((a, b) => (b.rank || 0) - (a.rank || 0));
+                    
+                    const typeContainer = document.createElement('div');
+                    typeContainer.className = 'pl-4 border-l border-amber-800';
+                    
+                    typeGroups[type].forEach(ant => {
+                        const antNode = createHierarchyNode(ant, 0);
+                        typeContainer.appendChild(antNode);
+                    });
+                    
+                    treeDiv.appendChild(typeContainer);
+                }
+            }
+            
+            hierarchyDiv.appendChild(treeDiv);
+        }
+        
+        // Create a single node in the hierarchy
+        function createHierarchyNode(ant, level) {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'flex items-center my-1';
+            
+            // Add connector line for non-root nodes
+            if (level > 0) {
+                const connector = document.createElement('span');
+                connector.className = 'inline-block w-4 h-4 border-l-2 border-b-2 border-amber-500 mr-2';
+                nodeDiv.appendChild(connector);
+            }
+            
+            // Create the node content
+            const rankText = ant.rank !== undefined ? colonyRanks[ant.rank] : colonyRanks[0];
+            nodeDiv.innerHTML += `
+                <span class="text-amber-400">
+                    ${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} #${ant.id}
+                    <span class="text-xs">(${rankText})</span>
+                </span>
+            `;
+            
+            return nodeDiv;
+        }
+
+        // Recruit an ant
+        function recruitAnt(type) {
+            if (gameIsPaused) return;
+            
+            const costs = { worker: 100, soldier: 200, scout: 150, nurse: 250, queen: 500 };
+            if (food >= costs[type] && (type !== 'queen' || !ants.some(ant => ant.type === 'queen'))) {
+                previousFood = food;
+                food -= costs[type];
+                
+                // Find the next available ant ID
+                const antId = (ants.length > 0 ? Math.max(...ants.map(a => a.id)) : 0) + 1;
+                
+                ants.push({ 
+                    id: antId,
+                    type, 
+                    status: 'Idle', 
+                    health: 100,
+                    rank: 0,
+                    experience: 0
+                });
+                
+                // Animate the food change
+                animateElement(document.getElementById('food'), "food-change");
+                
+                updateUI();
+            }
+        }
+
+        // Heal an ant
+        function healAnt(antId) {
+            if (gameIsPaused) return;
+            
+            const antIndex = ants.findIndex(a => a.id === antId);
+            if (antIndex === -1) return;
+            
+            const ant = ants[antIndex];
+            const nurses = ants.filter(ant => ant.type === 'nurse' && ant.health === 100).length;
+            const healCost = Math.round((100 - ant.health) * (1 - nurses * 0.2));
+            if (ant.health < 100 && ant.health > 0 && food >= healCost) {
+                previousFood = food;
+                food -= healCost;
+                ant.health = 100;
+                ant.status = 'Idle';
+                document.getElementById('forageStatus').textContent = `${ant.type.charAt(0).toUpperCase() + ant.type.slice(1)} Ant #${ant.id} healed! Forages in progress: ${foragesInProgress}`;
+                
+                // Animate the food change and healing
+                animateElement(document.getElementById('food'), "food-change");
+                
+                updateUI();
+            }
+        }
+
+        // Retire an ant
+        function retireAnt(antId) {
+            if (gameIsPaused) return;
+            
+            const antIndex = ants.findIndex(a => a.id === antId);
+            if (antIndex === -1) return;
+            
+            const antType = ants[antIndex].type;
+            lossLog.push(`${antType.charAt(0).toUpperCase() + antType.slice(1)} Ant #${antId} was retired.`);
+            ants.splice(antIndex, 1);
+            document.getElementById('forageStatus').textContent = `Ant retired. Forages in progress: ${foragesInProgress}`;
+            updateUI();
+        }
+
+        // Purchase wound resistance upgrade
+        function purchaseUpgrade() {
+            if (gameIsPaused) return;
+            
+            if (food >= 1000 && !woundResistanceUpgraded) {
+                previousFood = food;
+                food -= 1000;
+                woundResistanceUpgraded = true;
+                document.getElementById('forageStatus').textContent = `Wound resistance upgraded! Forages in progress: ${foragesInProgress}`;
+                
+                // Animate the food change
+                animateElement(document.getElementById('food'), "food-change");
+                
+                updateUI();
+            }
+        }
+
+        // Assign a forage
+        function assignForage() {
+            if (gameIsPaused) return;
+            
+            const selectedForage = document.getElementById('forageType').value;
+            const forage = forageTypes[selectedForage];
+            const availableWorkers = ants.filter(ant => ant.type === 'worker' && ant.status === 'Idle' && ant.health === 100);
+            if (food >= forage.cost && availableWorkers.length > 0 && foragesInProgress < ants.filter(ant => ant.type === 'worker' && ant.health === 100).length) {
+                previousFood = food;
+                food -= forage.cost;
+                foragesInProgress++;
+                
+                // Select highest-ranked worker for better success chances
+                availableWorkers.sort((a, b) => (b.rank || 0) - (a.rank || 0));
+                const idleAnt = availableWorkers[0];
+                idleAnt.status = `Foraging (${selectedForage})`;
+                
+                // Animate the food change
+                animateElement(document.getElementById('food'), "food-change");
+                
+                const soldiers = ants.filter(ant => ant.type === 'soldier' && ant.health === 100).length;
+                const woundChance = Math.max(0, (woundResistanceUpgraded ? 0.05 : 0.1) - (soldiers * 0.02));
+                
+                const scouts = ants.filter(ant => ant.type === 'scout' && ant.health === 100).length;
+                const duration = forage.duration * (1 - scouts * 0.1) * (1 - Math.min((idleAnt.rank || 0) * 0.05, 0.25)); // Higher rank = faster
+                
+                const queenCount = ants.filter(ant => ant.type === 'queen' && ant.health === 100).length;
+                let baseReward = forage.reward * (1 + queenCount * 0.1);
+                
+                // Higher rank workers bring more food
+                baseReward *= (1 + (idleAnt.rank || 0) * 0.1);
+
+                // Lower wound chance for higher ranked workers
+                const adjustedWoundChance = Math.max(0, woundChance - (idleAnt.rank || 0) * 0.01);
+                
+                if (Math.random() < adjustedWoundChance) {
+                    const healthLoss = Math.floor(Math.random() * 31) + 20;
+                    idleAnt.health = Math.max(0, idleAnt.health - healthLoss);
+                    idleAnt.status = idleAnt.health === 0 ? 'Dead' : 'Wounded';
+                    foragesInProgress--;
+                    const statusMessage = `Worker Ant #${idleAnt.id} wounded on ${selectedForage} forage! Lost ${healthLoss} health.`;
+                    document.getElementById('forageStatus').textContent = statusMessage;
+                    lossLog.push(statusMessage);
+                    if (idleAnt.health === 0) {
+                        lossLog.push(`Worker Ant #${idleAnt.id} died during forage attempt!`);
+                    }
+                    updateUI();
+                } else {
+                    const forageTimer = setInterval(() => {
+                        if (gameIsPaused) return;
+                        
+                        clearInterval(forageTimer);
+                        idleAnt.status = 'Idle';
+                        
+                        // Add experience for successful forage
+                        idleAnt.experience = (idleAnt.experience || 0) + 10;
+                        
+                        let remainingReward = baseReward;
+                        const queenShare = queenCount > 0 ? Math.min(remainingReward, 53) : 0;
+                        remainingReward -= queenShare;
+                        const workerCount = ants.filter(ant => ant.type === 'worker' && ant.health === 100).length;
+                        const soldierCount = ants.filter(ant => ant.type === 'soldier' && ant.health === 100).length;
+                        const scoutCount = ants.filter(ant => ant.type === 'scout' && ant.health === 100).length;
+                        const nurseCount = ants.filter(ant => ant.type === 'nurse' && ant.health === 100).length;
+                        const workerShare = remainingReward * 0.5 / Math.max(1, workerCount);
+                        const soldierShare = remainingReward * 0.3 / Math.max(1, soldierCount || 1);
+                        const scoutShare = remainingReward * 0.1 / Math.max(1, scoutCount || 1);
+                        const nurseShare = remainingReward * 0.1 / Math.max(1, nurseCount || 1);
+                        const redistributedShare = (soldierCount === 0 ? remainingReward * 0.3 : 0) + (scoutCount === 0 ? remainingReward * 0.1 : 0) + (nurseCount === 0 ? remainingReward * 0.1 : 0);
+                        const workerExtra = redistributedShare / Math.max(1, workerCount);
+                        
+                        previousFood = food;
+                        food += baseReward;
+                        
+                        // Animate the food change
+                        animateElement(document.getElementById('food'), "food-change");
+                        
+                        // Check for rank promotion based on experience
+                        const newRank = Math.min(Math.floor(idleAnt.experience / 50), colonyRanks.length - 1);
+                        if (newRank > idleAnt.rank) {
+                            idleAnt.rank = newRank;
+                            profitLog.push(`Worker Ant #${idleAnt.id} promoted to ${colonyRanks[idleAnt.rank]}!`);
+                        }
+                        
+                        const logMessage = `Forage: +${baseReward.toFixed(1)} food (Queen: ${queenShare.toFixed(1)}, Workers: ${(workerShare + workerExtra).toFixed(1)} each, Soldiers: ${soldierShare.toFixed(1)} each, Scouts: ${scoutShare.toFixed(1)} each, Nurses: ${nurseShare.toFixed(1)} each)`;
+                        profitLog.push(logMessage);
+                        document.getElementById('forageStatus').textContent = logMessage;
+                        completedForages++;
+                        foragesInProgress--;
+                        updateUI();
+                    }, duration);
+                }
+                updateUI();
+            }
+        }
+
+        // Initial UI update
+        updateUI();
+    </script>
+</body>
